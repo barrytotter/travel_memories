@@ -1,10 +1,16 @@
+import 'dart:io';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:travel_memories/core/di/injection.dart';
 import 'package:travel_memories/features/countries/data/datasources/country_local_datasource.dart';
 import 'package:travel_memories/features/countries/data/models/country_details_model.dart';
 import 'package:travel_memories/features/countries/domain/models/country_rating.dart';
 import 'package:travel_memories/features/map/utils/country_helper.dart';
+import 'package:travel_memories/features/memories/data/models/memory_model.dart';
+import 'package:travel_memories/features/memories/data/services/memory_capture_service.dart';
+import 'package:travel_memories/features/memories/presentation/widgets/create_memory_bottom_sheet.dart';
 
 @RoutePage()
 class CountryScreen extends StatefulWidget {
@@ -324,7 +330,9 @@ class _RatingCardState extends State<_RatingCard> {
   }
 }
 
-class MemoriesGalleryWidget extends StatelessWidget {
+enum MemorySortOption { newest, oldest, country }
+
+class MemoriesGalleryWidget extends StatefulWidget {
   final String countryCode;
   final bool isVisited;
 
@@ -335,8 +343,21 @@ class MemoriesGalleryWidget extends StatelessWidget {
   });
 
   @override
+  State<MemoriesGalleryWidget> createState() =>
+      _MemoriesGalleryWidgetState();
+}
+
+class _MemoriesGalleryWidgetState
+    extends State<MemoriesGalleryWidget> {
+  MemorySortOption _sortOption = MemorySortOption.newest;
+
+  @override
   Widget build(BuildContext context) {
-    if (!isVisited) {
+    final normalizedCountryCode =
+        MemoryModel.normalizeCountryIso(widget.countryCode);
+    final memoryBox = getIt<Box<MemoryModel>>();
+
+    if (!widget.isVisited) {
       return Card(
         color: Theme.of(
           context,
@@ -373,95 +394,376 @@ class MemoriesGalleryWidget extends StatelessWidget {
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
+    return ValueListenableBuilder(
+      valueListenable: memoryBox.listenable(),
+      builder: (context, Box<MemoryModel> box, _) {
+        final memories = _sortMemories(
+          box.values
+              .where(
+                (memory) =>
+                    MemoryModel.normalizeCountryIso(
+                      memory.countryIso,
+                    ) ==
+                    normalizedCountryCode,
+              )
+              .toList(),
+        );
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Галерея поездки',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                Row(
+                  mainAxisAlignment:
+                      MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Галерея поездки',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        PopupMenuButton<MemorySortOption>(
+                          tooltip: 'Сортировка',
+                          initialValue: _sortOption,
+                          onSelected: (value) {
+                            setState(
+                              () => _sortOption = value,
+                            );
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value:
+                                  MemorySortOption.newest,
+                              child: Text('Сначала новые'),
+                            ),
+                            const PopupMenuItem(
+                              value:
+                                  MemorySortOption.oldest,
+                              child: Text('Сначала старые'),
+                            ),
+                            const PopupMenuItem(
+                              value:
+                                  MemorySortOption.country,
+                              child: Text('По стране'),
+                            ),
+                          ],
+                          child: const Icon(Icons.sort),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          onPressed: () =>
+                              _captureMemory(context),
+                          icon: const Icon(
+                            Icons.add_a_photo,
+                          ),
+                          tooltip: 'Добавить фото',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (memories.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant,
+                      ),
+                      borderRadius: BorderRadius.circular(
+                        12,
+                      ),
+                    ),
+                    child: const Text(
+                      'Пока нет фото для этой страны.',
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                else
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics:
+                        const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                    itemCount: memories.length,
+                    itemBuilder: (context, index) {
+                      final memory = memories[index];
+                      final file = File(memory.imagePath);
+
+                      return GestureDetector(
+                        onTap: () => _showMemoryDetails(
+                          context,
+                          memory,
+                        ),
+                        child: ClipRRect(
+                          borderRadius:
+                              BorderRadius.circular(8),
+                          child: file.existsSync()
+                              ? Image.file(
+                                  file,
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  color:
+                                      Colors.grey.shade300,
+                                  child: const Icon(
+                                    Icons.broken_image,
+                                  ),
+                                ),
+                        ),
+                      );
+                    },
                   ),
-                ),
-                IconButton.filledTonal(
-                  onPressed: () {
-                    // TODO: Добавить логику прикрепления фото (image_picker)
-                  },
-                  icon: const Icon(Icons.add_a_photo),
-                  tooltip: 'Добавить фото',
-                ),
               ],
             ),
-            const SizedBox(height: 12),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-              itemCount: 3,
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return InkWell(
-                    onTap: () {
-                      // TODO: Добавить фото
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.outlineVariant,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          8,
-                        ),
-                      ),
-                      child: const Column(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add),
-                          SizedBox(height: 4),
-                          Text(
-                            'Загрузить',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
+          ),
+        );
+      },
+    );
+  }
 
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    child: const Center(
-                      child: Icon(
-                        Icons.image,
-                        color: Colors.grey,
-                      ),
-                    ),
+  List<MemoryModel> _sortMemories(
+    List<MemoryModel> memories,
+  ) {
+    final sorted = List<MemoryModel>.from(memories);
+
+    switch (_sortOption) {
+      case MemorySortOption.newest:
+        sorted.sort(
+          (a, b) => b.createdAt.compareTo(a.createdAt),
+        );
+        break;
+      case MemorySortOption.oldest:
+        sorted.sort(
+          (a, b) => a.createdAt.compareTo(b.createdAt),
+        );
+        break;
+      case MemorySortOption.country:
+        sorted.sort(
+          (a, b) => (a.countryIso ?? '').compareTo(
+            b.countryIso ?? '',
+          ),
+        );
+        break;
+    }
+
+    return sorted;
+  }
+
+  Future<void> _captureMemory(BuildContext context) async {
+    final capture = await getIt<MemoryCaptureService>()
+        .capture();
+    if (capture == null || !context.mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (modalContext) => CreateMemoryBottomSheet(
+        capture: capture,
+        currentCountryIso: widget.countryCode.toUpperCase(),
+        onSave: (memory) async {
+          final memoryBox = getIt<Box<MemoryModel>>();
+          await memoryBox.put(memory.id, memory);
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Фото сохранено в галерею'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  void _showMemoryDetails(
+    BuildContext context,
+    MemoryModel memory,
+  ) {
+    final file = File(memory.imagePath);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (file.existsSync())
+                SizedBox(
+                  width: double.infinity,
+                  height: 280,
+                  child: Image.file(
+                    file,
+                    fit: BoxFit.cover,
                   ),
-                );
-              },
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    if (memory.description.isNotEmpty)
+                      Text(
+                        memory.description,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Дата: ${memory.createdAt.toString().split('.')[0]}',
+                    ),
+                    if (memory.countryIso != null)
+                      Text('Страна: ${memory.countryIso}'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            onPressed: () {
+                              Navigator.of(
+                                dialogContext,
+                              ).pop();
+                              _showFullScreenImage(
+                                context,
+                                memory,
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.fullscreen,
+                            ),
+                            label: const Text(
+                              'Полный экран',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          onPressed: () => _deleteMemory(
+                            dialogContext,
+                            memory,
+                          ),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                          ),
+                          tooltip: 'Удалить фото',
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFullScreenImage(
+    BuildContext context,
+    MemoryModel memory,
+  ) {
+    final file = File(memory.imagePath);
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            if (file.existsSync())
+              Image.file(file, fit: BoxFit.contain)
+            else
+              const Center(
+                child: Icon(Icons.broken_image, size: 64),
+              ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: CircleAvatar(
+                backgroundColor: Colors.black45,
+                child: IconButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(),
+                  icon: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _deleteMemory(
+    BuildContext dialogContext,
+    MemoryModel memory,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: dialogContext,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить фото?'),
+        content: const Text(
+          'Фотография будет удалена из галереи и с устройства.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final box = getIt<Box<MemoryModel>>();
+    await box.delete(memory.id);
+
+    final file = File(memory.imagePath);
+    if (file.existsSync()) {
+      await file.delete();
+    }
+
+    if (dialogContext.mounted) {
+      Navigator.of(dialogContext).pop();
+    }
+
+    if (dialogContext.mounted) {
+      ScaffoldMessenger.of(dialogContext).showSnackBar(
+        const SnackBar(
+          content: Text('Фото удалено'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }

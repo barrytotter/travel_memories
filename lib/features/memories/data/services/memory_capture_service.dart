@@ -1,46 +1,51 @@
 import 'dart:io';
+
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
 import 'package:travel_memories/features/memories/data/models/memory_capture_result.dart';
 
 class MemoryCaptureService {
   final ImagePicker _picker = ImagePicker();
 
   Future<MemoryCaptureResult?> capture() async {
-    // 1. Открываем ТОЛЬКО камеру
+    // 1. Открываем камеру.
     final XFile? photo = await _picker.pickImage(
       source: ImageSource.camera,
       requestFullMetadata: true,
     );
 
     if (photo == null) {
-      return null; // Пользователь отменил съемку
+      return null;
     }
 
     final now = DateTime.now();
 
-    // 2. Параллельный запрос GPS
     final positionFuture = _getQuickPosition();
 
-    // 3. Сохраняем фото в закрытую папку приложения
     final appDir = await getApplicationDocumentsDirectory();
+
+    final memoriesDirectory = Directory(
+      p.join(appDir.path, 'memories'),
+    );
+
+    if (!await memoriesDirectory.exists()) {
+      await memoriesDirectory.create(recursive: true);
+    }
+
     final fileName =
         'mem_${now.millisecondsSinceEpoch}.jpg';
+
     final targetPath = p.join(
-      appDir.path,
-      'memories',
+      memoriesDirectory.path,
       fileName,
     );
 
-    final file = File(targetPath);
-    if (!await file.parent.exists()) {
-      await file.parent.create(recursive: true);
-    }
-
-    // 4. Сжимаем изображение для экономии памяти
+    // Сжимаем и сохраняем фотографию.
     final compressed =
         await FlutterImageCompress.compressAndGetFile(
           photo.path,
@@ -49,30 +54,40 @@ class MemoryCaptureService {
           format: CompressFormat.jpeg,
         );
 
+    final savedImagePath = compressed?.path ?? photo.path;
+
     final position = await positionFuture;
 
+    final detectedCountryIso = position == null
+        ? null
+        : await _detectCountryIso(position);
+
     return MemoryCaptureResult(
-      imagePath: compressed?.path ?? photo.path,
+      imagePath: savedImagePath,
       createdAt: now,
       position: position,
+      detectedCountryIso: detectedCountryIso,
     );
   }
 
   Future<Position?> _getQuickPosition() async {
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
+      final isLocationEnabled =
+          await Geolocator.isLocationServiceEnabled();
+
+      if (!isLocationEnabled) {
         return null;
       }
 
-      LocationPermission perm =
+      LocationPermission permission =
           await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-        if (perm == LocationPermission.denied) {
-          return null;
-        }
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.deniedForever) {
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         return null;
       }
 
@@ -83,6 +98,35 @@ class MemoryCaptureService {
         ),
       );
     } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _detectCountryIso(
+    Position position,
+  ) async {
+    try {
+      final geocoding = Geocoding();
+      final placemarks = await geocoding
+          .placemarkFromCoordinates(
+            position.latitude,
+            position.longitude,
+          );
+
+      if (placemarks.isEmpty) {
+        return null;
+      }
+
+      final isoCode = placemarks.first.isoCountryCode;
+
+      if (isoCode == null || isoCode.trim().isEmpty) {
+        return null;
+      }
+
+      return isoCode.toUpperCase();
+    } catch (_) {
+      // Reverse geocoding может не сработать,
+      // поэтому просто оставляем страну неопределённой.
       return null;
     }
   }

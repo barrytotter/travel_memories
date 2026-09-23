@@ -4,6 +4,15 @@ part 'memory_model.g.dart';
 
 @HiveType(typeId: 2)
 class MemoryModel extends HiveObject {
+  static String? normalizeCountryIso(String? value) {
+    if (value == null) return null;
+
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+
+    return trimmed.toUpperCase();
+  }
+
   @HiveField(0)
   final String id;
 
@@ -36,6 +45,6 @@ class MemoryModel extends HiveObject {
     required this.createdAt,
     this.latitude,
     this.longitude,
-    this.countryIso,
-  });
+    String? countryIso,
+  }) : countryIso = normalizeCountryIso(countryIso);
 }

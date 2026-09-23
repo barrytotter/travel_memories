@@ -107,6 +107,11 @@ class _CreateMemoryBottomSheetState
   }
 
   void _save() {
+    final countryIso = MemoryModel.normalizeCountryIso(
+      widget.currentCountryIso ??
+          widget.capture.detectedCountryIso,
+    );
+
     final memory = MemoryModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imagePath: widget.capture.imagePath,
@@ -115,7 +120,7 @@ class _CreateMemoryBottomSheetState
       createdAt: widget.capture.createdAt,
       latitude: widget.capture.position?.latitude,
       longitude: widget.capture.position?.longitude,
-      countryIso: widget.currentCountryIso,
+      countryIso: countryIso,
     );
 
     widget.onSave(memory);

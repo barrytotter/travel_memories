@@ -53,6 +53,7 @@ dependencies:
   path_drawing: ^1.0.1
   vector_graphics: ^1.2.3
   shared_preferences: ^2.2.2
+  geocoding: ^5.0.0
 
 dev_dependencies:
   hive_ce_generator: ^1.11.2
