@@ -1,0 +1,57 @@
+{
+  "@@locale": "ru",
+  "visitedCountryNoun": "{count, plural, one{страна посещена} few{страны посещены} many{стран посещено} other{страны посещены}}",
+  "@visitedCountryNoun": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "visitedCountryCount": "{count, plural, one{{count} страна} few{{count} страны} many{{count} стран} other{{count} страны}}",
+  "@visitedCountryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "topTravelers": "Топ ~{percentage}% путешественников",
+  "@topTravelers": {
+    "placeholders": {
+      "percentage": {
+        "type": "String"
+      }
+    }
+  },
+  "belowTravelersPercentile": "Ориентировочно ниже ~75-го процентиля путешественников",
+  "countriesOutOfTotal": "{visited} из {total} стран",
+  "@countriesOutOfTotal": {
+    "placeholders": {
+      "visited": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "worldProgressPercentage": "≈ {percentage}% мира",
+  "@worldProgressPercentage": {
+    "placeholders": {
+      "percentage": {
+        "type": "String"
+      }
+    }
+  }
+  ,"visitedCountriesTeaser": "Посещённые страны • {count}"
+  ,"@visitedCountriesTeaser": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
+  ,"noVisitedCountries": "Нет посещённых стран"
+  ,"unknownCountry": "Неизвестная страна"
+}

@@ -1,0 +1,57 @@
+{
+  "@@locale": "en",
+  "visitedCountryNoun": "{count, plural, one{country visited} other{countries visited}}",
+  "@visitedCountryNoun": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "visitedCountryCount": "{count, plural, one{{count} country} other{{count} countries}}",
+  "@visitedCountryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "topTravelers": "Top ~{percentage}% of travelers",
+  "@topTravelers": {
+    "placeholders": {
+      "percentage": {
+        "type": "String"
+      }
+    }
+  },
+  "belowTravelersPercentile": "Below roughly the 75th percentile of travelers",
+  "countriesOutOfTotal": "{visited} of {total} countries",
+  "@countriesOutOfTotal": {
+    "placeholders": {
+      "visited": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "worldProgressPercentage": "{percentage}% of the world",
+  "@worldProgressPercentage": {
+    "placeholders": {
+      "percentage": {
+        "type": "String"
+      }
+    }
+  }
+  ,"visitedCountriesTeaser": "Visited countries • {count}"
+  ,"@visitedCountriesTeaser": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
+  ,"noVisitedCountries": "No visited countries yet"
+  ,"unknownCountry": "Unknown country"
+}

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:travel_memories/l10n/generated/app_localizations.dart';
 import 'core/router/app_router.dart';
 
 class TravelMemoriesApp extends StatelessWidget {
@@ -11,6 +12,9 @@ class TravelMemoriesApp extends StatelessWidget {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'Travel Memories',
+      localizationsDelegates:
+          AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: Colors.blue,

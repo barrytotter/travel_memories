@@ -1,10 +1,14 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:travel_memories/core/di/injection.dart';
 import 'package:travel_memories/core/router/app_router.gr.dart';
 import 'package:travel_memories/features/countries/data/datasources/country_local_datasource.dart';
-import 'package:travel_memories/features/map/utils/country_helper.dart';
+import 'package:travel_memories/features/map/domain/travel_statistics.dart';
 import 'package:travel_memories/features/map/presentation/widgets/interactive_world_map.dart';
+import 'package:travel_memories/features/map/utils/country_helper.dart';
+import 'package:travel_memories/l10n/generated/app_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 @RoutePage()
 class HomeScreen extends StatefulWidget {
@@ -15,7 +19,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<String> _countries = [];
   Set<String> _visitedCodes = {};
 
   @override
@@ -54,40 +57,29 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      endDrawer: TravelsDrawer(
-        countries: _countries,
-        onCountrySelect: (countryCode) {
-          context.router.maybePop();
-          _openCountryScreen(countryCode);
-        },
-      ),
       body: SafeArea(
         child: Stack(
+          fit: StackFit.expand,
           children: [
-            Column(
-              children: [
-                _Statistics(
-                  visitedCount: _visitedCodes.length,
-                ),
-                Expanded(
-                  child: WorldMap(
-                    visitedCodes: _visitedCodes,
-                    onCountriesLoaded: (countries) {
-                      setState(() {
-                        _countries = countries;
-                      });
-                    },
-                    onCountrySelect: (countryCode) {
-                      _openCountryScreen(countryCode);
-                    },
-                  ),
-                ),
-              ],
+            WorldMap(
+              visitedCodes: _visitedCodes,
+              onCountrySelect: (countryCode) {
+                _openCountryScreen(countryCode);
+              },
             ),
-            const Positioned(
-              top: 16,
-              right: 16,
-              child: _MenuButton(),
+            Positioned(
+              top: 12,
+              left: 16,
+              right: 76,
+              child: _Statistics(
+                visitedCount: _visitedCodes.length,
+              ),
+            ),
+            Positioned.fill(
+              child: _VisitedCountriesSheet(
+                countryCodes: _visitedCodes,
+                onCountrySelect: _openCountryScreen,
+              ),
             ),
           ],
         ),
@@ -103,127 +95,290 @@ class _Statistics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
+    final locale = localizations.localeName;
+    final worldProgress =
+        TravelStatistics.calculateWorldProgress(
+          visitedCount,
+        );
+    final travelPercentile =
+        TravelStatistics.calculateTravelPercentile(
+          visitedCount,
+        );
+    final formattedPercentile = NumberFormat(
+      travelPercentile < 1 ? '0.#' : '0',
+      locale,
+    ).format(travelPercentile);
+    final formattedWorldProgress = NumberFormat(
+      '0.#',
+      locale,
+    ).format(worldProgress * 100);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 70, 10),
-      child: Row(
-        children: [
-          _Statistic(
-            value: '$visitedCount',
-            label: 'countries',
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 12,
+      ),
+      child: Material(
+        color: Theme.of(
+          context,
+        ).colorScheme.surface.withValues(alpha: 0.94),
+        borderRadius: BorderRadius.circular(16),
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
           ),
-          const SizedBox(width: 32),
-          const _Statistic(value: '0', label: 'memories'),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Semantics(
+                label: localizations.visitedCountryCount(
+                  visitedCount,
+                ),
+                child: ExcludeSemantics(
+                  child: Column(
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$visitedCount',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      Text(
+                        localizations.visitedCountryNoun(
+                          visitedCount,
+                        ),
+                        style: Theme.of(context)
+                            .textTheme
+                            .labelLarge
+                            ?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                visitedCount == 0
+                    ? localizations.belowTravelersPercentile
+                    : localizations.topTravelers(
+                        formattedPercentile,
+                      ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: worldProgress,
+                  minHeight: 3,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      localizations.countriesOutOfTotal(
+                        visitedCount,
+                        TravelStatistics.totalCountries,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    localizations.worldProgressPercentage(
+                      formattedWorldProgress,
+                    ),
+                    maxLines: 1,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _Statistic extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _Statistic({
-    required this.value,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MenuButton extends StatelessWidget {
-  const _MenuButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).colorScheme.surface,
-      elevation: 3,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        onTap: () => Scaffold.of(context).openEndDrawer(),
-        borderRadius: BorderRadius.circular(14),
-        child: const Padding(
-          padding: EdgeInsets.all(12),
-          child: Icon(Icons.menu),
-        ),
-      ),
-    );
-  }
-}
-
-class TravelsDrawer extends StatelessWidget {
-  final List<String> countries;
+class _VisitedCountriesSheet extends StatelessWidget {
+  final Set<String> countryCodes;
   final ValueChanged<String> onCountrySelect;
 
-  const TravelsDrawer({
-    super.key,
-    required this.countries,
+  const _VisitedCountriesSheet({
+    required this.countryCodes,
     required this.onCountrySelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final sortedCountries = List<String>.from(countries)
+    final localizations = AppLocalizations.of(context)!;
+    final sortedCountryCodes = countryCodes.toList()
       ..sort(
         (a, b) => CountryHelper.getNameRu(
           a,
         ).compareTo(CountryHelper.getNameRu(b)),
       );
 
-    return Drawer(
-      child: ListView(
-        children: [
-          const DrawerHeader(
-            child: Text(
-              'Все страны',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+    return DraggableScrollableSheet(
+      initialChildSize: 0.12,
+      minChildSize: 0.12,
+      maxChildSize: 0.78,
+      snap: true,
+      snapSizes: const [0.12, 0.5, 0.78],
+      builder: (context, scrollController) {
+        return Material(
+          color: Theme.of(context).colorScheme.surface,
+          elevation: 12,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(20),
           ),
-          ...sortedCountries.map((code) {
-            final flag = CountryHelper.getFlagEmoji(code);
-            final nameRu = CountryHelper.getNameRu(code);
+          child: CustomScrollView(
+            controller: scrollController,
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        top: 10,
+                        bottom: 10,
+                      ),
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant
+                              .withValues(alpha: 0.4),
+                          borderRadius:
+                              BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        20,
+                        0,
+                        20,
+                        12,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          localizations
+                              .visitedCountriesTeaser(
+                                countryCodes.length,
+                              ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (sortedCountryCodes.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      localizations.noVisitedCountries,
+                    ),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate((
+                    context,
+                    index,
+                  ) {
+                    final code = sortedCountryCodes[index];
+                    final name = CountryHelper.getNameRu(
+                      code,
+                    );
+                    final displayName =
+                        name.toLowerCase() == code
+                        ? localizations.unknownCountry
+                        : name;
 
-            return ListTile(
-              leading: Text(
-                flag,
-                style: const TextStyle(fontSize: 24),
-              ),
-              title: Text(nameRu),
-              subtitle: Text(
-                code,
-                style: const TextStyle(fontSize: 12),
-              ),
-              onTap: () => onCountrySelect(code),
-            );
-          }),
-        ],
-      ),
+                    return ListTile(
+                      contentPadding:
+                          const EdgeInsets.symmetric(
+                            horizontal: 20,
+                          ),
+                      minLeadingWidth: 48,
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          4,
+                        ),
+                        child: SizedBox(
+                          width: 42,
+                          height: 28,
+                          child: SvgPicture.asset(
+                            'assets/flags/$code.svg',
+                            fit: BoxFit.cover,
+                            errorBuilder:
+                                (
+                                  context,
+                                  error,
+                                  stackTrace,
+                                ) => ColoredBox(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  child: Center(
+                                    child: Text(
+                                      CountryHelper.getFlagEmoji(
+                                        code,
+                                      ),
+                                      style:
+                                          const TextStyle(
+                                            fontSize: 20,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                          ),
+                        ),
+                      ),
+                      title: Text(displayName),
+                      onTap: () => onCountrySelect(code),
+                    );
+                  }, childCount: sortedCountryCodes.length),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
