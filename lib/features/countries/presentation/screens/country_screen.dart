@@ -219,110 +219,146 @@ class _RatingCardState extends State<_RatingCard> {
   @override
   void didUpdateWidget(covariant _RatingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+
     if (oldWidget.rating != widget.rating) {
       _rating = widget.rating;
     }
   }
 
+  void _updateRating({
+    required double value,
+    required double currentValue,
+    required CountryRating Function(double) update,
+  }) {
+    final newValue = value;
+
+    setState(() {
+      _rating = update(newValue);
+    });
+
+    widget.onSave(_rating);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _field(
-              'Еда',
-              _rating.food,
-              (value) => setState(
-                () =>
-                    _rating = _rating.copyWith(food: value),
-              ),
+            Text(
+              'Оценки',
+              style: theme.textTheme.titleMedium,
             ),
-            _field(
-              'Развлечения',
-              _rating.entertainment,
-              (value) => setState(
-                () => _rating = _rating.copyWith(
-                  entertainment: value,
-                ),
-              ),
-            ),
-            _field(
-              'Природа',
-              _rating.nature,
-              (value) => setState(
-                () => _rating = _rating.copyWith(
-                  nature: value,
-                ),
-              ),
-            ),
-            _field(
-              'Комфорт',
-              _rating.comfort,
-              (value) => setState(
-                () => _rating = _rating.copyWith(
-                  comfort: value,
-                ),
-              ),
-            ),
-            _field(
-              'Цена',
-              _rating.price,
-              (value) => setState(
-                () => _rating = _rating.copyWith(
-                  price: value,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
             Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Общая оценка'),
-                Text('${_rating.overall} / 5.0'),
+                const Icon(
+                  Icons.star_rounded,
+                  color: Colors.amber,
+                  size: 22,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _rating.overall.toStringAsFixed(1),
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                Text(
+                  ' / 5',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(
+                        color: colorScheme.outline,
+                      ),
+                ),
               ],
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () => widget.onSave(_rating),
-                child: const Text('Сохранить оценку'),
-              ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+
+        _ratingRow(
+          'Еда',
+          _rating.food,
+          (value) => _rating.copyWith(food: value),
+        ),
+        _ratingRow(
+          'Развлечения',
+          _rating.entertainment,
+          (value) => _rating.copyWith(entertainment: value),
+        ),
+        _ratingRow(
+          'Природа',
+          _rating.nature,
+          (value) => _rating.copyWith(nature: value),
+        ),
+        _ratingRow(
+          'Комфорт',
+          _rating.comfort,
+          (value) => _rating.copyWith(comfort: value),
+        ),
+        _ratingRow(
+          'Цены',
+          _rating.price,
+          (value) => _rating.copyWith(price: value),
+        ),
+      ],
     );
   }
 
-  Widget _field(
+  Widget _ratingRow(
     String label,
-    double value,
-    ValueChanged<double> onChanged,
+    double currentValue,
+    CountryRating Function(double) update,
   ) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 38,
       child: Row(
         children: [
-          SizedBox(width: 100, child: Text(label)),
           Expanded(
-            child: Slider(
-              value: value.clamp(0.0, 5.0),
-              min: 0,
-              max: 5,
-              divisions: 10,
-              onChanged: onChanged,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
-          SizedBox(
-            width: 36,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Text(value.toStringAsFixed(1)),
-            ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(5, (index) {
+              final starValue = index + 1;
+              final isSelected = starValue <= currentValue;
+
+              return IconButton(
+                onPressed: () {
+                  _updateRating(
+                    value: starValue.toDouble(),
+                    currentValue: currentValue,
+                    update: update,
+                  );
+                },
+                icon: Icon(
+                  isSelected
+                      ? Icons.star_rounded
+                      : Icons.star_outline_rounded,
+                  color: isSelected
+                      ? Colors.amber
+                      : colorScheme.outlineVariant,
+                ),
+                iconSize: 23,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 30,
+                  minHeight: 30,
+                ),
+                visualDensity: VisualDensity.compact,
+                tooltip: '$starValue из 5',
+              );
+            }),
           ),
         ],
       ),
